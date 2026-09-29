@@ -1,0 +1,8 @@
+﻿pandas==2.3.3
+requests==2.34.2
+psycopg2-binary==2.9.13
+python-dotenv==1.2.3
+fastparquet==2026.9.0
+pyarrow==25.0.1
+great-expectations==0.18.22
+pytest==9.1.1

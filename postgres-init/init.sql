@@ -1,0 +1,1 @@
+CREATE DATABASE cfpb_pipeline;
