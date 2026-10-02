@@ -35,8 +35,21 @@ CREATE TABLE IF NOT EXISTS raw_cfpb_complaints (
     date_sent_to_company DATE,
     company_response_to_consumer TEXT,
     timely_response TEXT,
-    complaint_id BIGINT
+    complaint_id BIGINT,
+    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    source_system TEXT DEFAULT 'cfpb_bulk_csv'
 );
+"""
+
+ALTER_AND_INDEX_SQL = """
+ALTER TABLE raw_cfpb_complaints
+  ADD COLUMN IF NOT EXISTS ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS source_system TEXT DEFAULT 'cfpb_bulk_csv';
+
+CREATE INDEX IF NOT EXISTS idx_cfpb_complaint_id ON raw_cfpb_complaints (complaint_id);
+CREATE INDEX IF NOT EXISTS idx_cfpb_date_received ON raw_cfpb_complaints (date_received);
+CREATE INDEX IF NOT EXISTS idx_cfpb_product ON raw_cfpb_complaints (product);
+ANALYZE raw_cfpb_complaints;
 """
 
 def ensure_database_and_table():

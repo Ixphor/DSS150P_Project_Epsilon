@@ -2,6 +2,10 @@ CREATE DATABASE cfpb_pipeline;
 
 \c cfpb_pipeline;
 
+CREATE SCHEMA IF NOT EXISTS raw;
+CREATE SCHEMA IF NOT EXISTS staging;
+CREATE SCHEMA IF NOT EXISTS curated;
+
 CREATE TABLE IF NOT EXISTS raw_cfpb_complaints (
     date_received DATE,
     product TEXT,
@@ -17,5 +21,7 @@ CREATE TABLE IF NOT EXISTS raw_cfpb_complaints (
     date_sent_to_company DATE,
     company_response_to_consumer TEXT,
     timely_response TEXT,
-    complaint_id BIGINT
+    complaint_id BIGINT,
+    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    source_system TEXT DEFAULT 'cfpb_complaints_csv'
 );
