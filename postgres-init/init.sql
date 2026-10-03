@@ -17,5 +17,5 @@ CREATE TABLE IF NOT EXISTS raw_cfpb_complaints (
     date_sent_to_company DATE,
     company_response_to_consumer TEXT,
     timely_response TEXT,
-    complaint_id BIGINT
+    complaint_id BIGINT PRIMARY KEY
 );

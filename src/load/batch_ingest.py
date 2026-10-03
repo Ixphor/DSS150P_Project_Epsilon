@@ -5,11 +5,18 @@ import time
 import pandas as pd
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DB_HOST = os.getenv("DB_HOST", "localhost")
 
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_USER = os.getenv("POSTGRES_USER", "airflow")
-DB_PASS = os.getenv("POSTGRES_PASSWORD", "airflow_pass")
+DB_PASS = os.getenv("POSTGRES_PASSWORD")
+if not DB_PASS:
+    raise EnvironmentError("POSTGRES_PASSWORD not set — check your .env file")
 TARGET_DB = os.getenv("TARGET_DB", "cfpb_pipeline")
 
 EXPECTED_COLS = [
@@ -35,7 +42,7 @@ CREATE TABLE IF NOT EXISTS raw_cfpb_complaints (
     date_sent_to_company DATE,
     company_response_to_consumer TEXT,
     timely_response TEXT,
-    complaint_id BIGINT
+    complaint_id BIGINT PRIMARY KEY
 );
 """
 
