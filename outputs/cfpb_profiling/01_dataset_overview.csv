@@ -1,0 +1,2 @@
+total_records,unique_complaint_ids,distinct_products,distinct_sub_products,distinct_companies,distinct_states,distinct_submitted_via,min_date_received,max_date_received,negative_sla_lag_anomalies
+18040765,18040765,21,86,8130,63,6,2011-12-01,2026-09-27,7050
