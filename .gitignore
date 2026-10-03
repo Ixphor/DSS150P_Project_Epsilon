@@ -9,6 +9,7 @@ venv/
 
 # Data (structure tracked, contents ignored)
 data/raw/*
+data/raw/complaints.csv     #actual raw data (csv format)
 data/staging/*
 data/curated/*
 !data/raw/.gitkeep
@@ -16,8 +17,9 @@ data/curated/*
 !data/curated/.gitkeep
 
 # Airflow
-logs/
+logs/*
 *.log
+!logs/.gitkeep
 
 # OS/editor
 .DS_Store
