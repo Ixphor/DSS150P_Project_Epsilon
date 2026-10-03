@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -8,6 +9,9 @@ import requests
 BASE_URL = "https://api.fdic.gov/banks/institutions"
 RAW_DIR = Path("data/raw/fdic")
 PAGE_SIZE = 1000
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 
 
 def fetch_institutions(filters="ACTIVE:1"):
@@ -23,16 +27,35 @@ def fetch_institutions(filters="ACTIVE:1"):
                 "sort_order": "ASC",
                 "format": "json",
             }
-            response = session.get(BASE_URL, params=params, timeout=60)
-            response.raise_for_status()
+
+            try:
+                response = session.get(BASE_URL, params=params, timeout=60)
+                response.raise_for_status()
+            except requests.exceptions.Timeout:
+                logger.error("FDIC API request timed out at offset %d", offset)
+                raise
+            except requests.exceptions.HTTPError as e:
+                logger.error("FDIC API returned HTTP error at offset %d: %s", offset, e)
+                raise
+            except requests.exceptions.RequestException as e:
+                logger.error("FDIC API request failed at offset %d: %s", offset, e)
+                raise
+
             payload = response.json()
             rows = payload.get("data", [])
             if not rows:
                 break
+
             records.extend(row["data"] for row in rows)
+            logger.info("Fetched %d institutions so far (offset %d)", len(records), offset)
             offset += len(rows)
-            if offset >= payload.get("meta", {}).get("total", 0):
+
+            # Stop once we get a short page back — more reliable than trusting
+            # meta.total, which could be missing/0 and cause silent truncation.
+            if len(rows) < PAGE_SIZE:
                 break
+
+    logger.info("Finished fetching FDIC institutions: %d total", len(records))
     return records
 
 
@@ -47,6 +70,7 @@ def save_raw(records):
         "records": records,
     }
     path.write_text(json.dumps(document), encoding="utf-8")
+    logger.info("Saved raw FDIC data to %s", path)
     return path
 
 
@@ -55,6 +79,7 @@ def to_parquet(raw_path):
     frame = pd.DataFrame(document["records"])
     out_path = raw_path.with_suffix(".parquet")
     frame.to_parquet(out_path, index=False)
+    logger.info("Saved Parquet file to %s", out_path)
     return out_path
 
 
