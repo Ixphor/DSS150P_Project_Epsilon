@@ -5,11 +5,16 @@ import time
 import pandas as pd
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_USER = os.getenv("POSTGRES_USER", "airflow")
-DB_PASS = os.getenv("POSTGRES_PASSWORD", "airflow_pass")
+DB_PASS = os.getenv("POSTGRES_PASSWORD")
+if not DB_PASS:
+    raise EnvironmentError("POSTGRES_PASSWORD not set — check your .env file")
 TARGET_DB = os.getenv("TARGET_DB", "cfpb_pipeline")
 
 EXPECTED_COLS = [
@@ -20,6 +25,8 @@ EXPECTED_COLS = [
 ]
 
 CREATE_TABLE_SQL = """
+CREATE SCHEMA IF NOT EXISTS raw;
+
 CREATE TABLE IF NOT EXISTS raw.raw_cfpb_complaints (
     date_received DATE,
     product TEXT,
@@ -39,24 +46,17 @@ CREATE TABLE IF NOT EXISTS raw.raw_cfpb_complaints (
     ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     source_system TEXT DEFAULT 'cfpb_bulk_csv'
 );
-"""
 
-ALTER_AND_INDEX_SQL = """
-ALTER TABLE raw.raw_cfpb_complaints
-  ADD COLUMN IF NOT EXISTS ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  ADD COLUMN IF NOT EXISTS source_system TEXT DEFAULT 'cfpb_bulk_csv';
-
-CREATE INDEX IF NOT EXISTS idx_cfpb_complaint_id ON raw.raw_cfpb_complaints (complaint_id);
 CREATE INDEX IF NOT EXISTS idx_cfpb_date_received ON raw.raw_cfpb_complaints (date_received);
 CREATE INDEX IF NOT EXISTS idx_cfpb_product ON raw.raw_cfpb_complaints (product);
-ANALYZE raw.raw_cfpb_complaints;
 """
+
 
 def ensure_database_and_table():
     conn = psycopg2.connect(dbname="airflow", user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT)
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = conn.cursor()
-    cur.execute(f"SELECT 1 FROM pg_database WHERE datname = '{TARGET_DB}';")
+    cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (TARGET_DB,))
     if not cur.fetchone():
         cur.execute(f"CREATE DATABASE {TARGET_DB};")
         print(f"Created database '{TARGET_DB}'.")
@@ -70,6 +70,7 @@ def ensure_database_and_table():
     cur.close()
     conn.close()
 
+
 def ingest_in_batches(csv_path: str, batch_size: int = 100_000, truncate_first: bool = True):
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"Cannot find file at: {csv_path}")
@@ -80,11 +81,11 @@ def ingest_in_batches(csv_path: str, batch_size: int = 100_000, truncate_first: 
     cur = conn.cursor()
 
     if truncate_first:
-        cur.execute("TRUNCATE TABLE raw_cfpb_complaints;")
+        cur.execute("TRUNCATE TABLE raw.raw_cfpb_complaints;")
         conn.commit()
-        print("Cleared existing rows in raw_cfpb_complaints.")
+        print("Cleared existing rows in raw.raw_cfpb_complaints.")
 
-    copy_sql = "COPY raw.raw_cfpb_complaints FROM STDIN WITH (FORMAT csv, NULL '')"
+    copy_sql = "COPY raw.raw_cfpb_complaints (date_received, product, sub_product, issue, sub_issue, company_public_response, company, state, zip_code, tags, submitted_via, date_sent_to_company, company_response_to_consumer, timely_response, complaint_id) FROM STDIN WITH (FORMAT csv, NULL '')"
     total_rows = 0
     start_time = time.time()
 
@@ -108,8 +109,13 @@ def ingest_in_batches(csv_path: str, batch_size: int = 100_000, truncate_first: 
 
     total_time = time.time() - start_time
     print(f"\nFinished! Ingested {total_rows:,} total rows from {csv_path} in {total_time:.2f}s.")
+
+    cur.execute("ANALYZE raw.raw_cfpb_complaints;")
+    conn.commit()
+
     cur.close()
     conn.close()
+
 
 if __name__ == "__main__":
     default_path = "data/raw/complaints.csv"
