@@ -1,0 +1,7 @@
+Rule,Failed Rows
+0_duplicate_complaint_ids,0
+1_null_core_keys,0
+2_invalid_timely_enum,0
+3_negative_sla_lag,7050
+4_invalid_zip_format,74
+5_future_date_received,0
