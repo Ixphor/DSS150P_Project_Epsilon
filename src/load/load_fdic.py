@@ -9,9 +9,9 @@ import sys
 from datetime import datetime
 import pandas as pd
 from src.utils.db import get_connection, ensure_database_exists
-
-if not DB_PASS:
-    raise EnvironmentError("POSTGRES_PASSWORD not set — check your .env file")
+import pandas as pd
+from psycopg2.extras import execute_values
+from src.utils.db import get_connection, ensure_database_exists
 
 COLUMN_MAP = {
     "CERT": "cert",
