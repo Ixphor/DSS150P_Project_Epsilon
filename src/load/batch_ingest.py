@@ -12,8 +12,10 @@ load_dotenv()
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_USER = os.getenv("POSTGRES_USER", "airflow")
-DB_PASS = os.getenv("POSTGRES_PASSWORD", "airflow_pass")
-TARGET_DB = os.getenv("TARGET_DB", "cfpb_pipeline")
+DB_PASS = os.getenv("POSTGRES_PASSWORD")
+if not DB_PASS:
+    raise EnvironmentError("POSTGRES_PASSWORD not set - check your .env file")
+TARGET_DB = os.getenv("POSTGRES_DB", "airflow")
 
 EXPECTED_COLS = [
     "Date received", "Product", "Sub-product", "Issue", "Sub-issue",
