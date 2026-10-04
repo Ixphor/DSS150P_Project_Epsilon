@@ -1,6 +1,6 @@
 """
 FDIC Institution Loader
-Loads FDIC BankFind data from the latest Parquet file into raw_fdic_institutions.
+Loads FDIC BankFind data from the latest Parquet file into raw.raw_fdic_institutions.
 Idempotent: UPSERT on CERT (FDIC's unique institution ID).
 """
 import os
@@ -14,8 +14,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
+DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
+DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 DB_USER = os.getenv("POSTGRES_USER", "airflow")
 DB_PASS = os.getenv("POSTGRES_PASSWORD")
 TARGET_DB = os.getenv("TARGET_DB", "cfpb_pipeline")
@@ -49,7 +49,9 @@ COLUMN_MAP = {
 }
 
 CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS raw_fdic_institutions (
+CREATE SCHEMA IF NOT EXISTS raw;
+
+CREATE TABLE IF NOT EXISTS raw.raw_fdic_institutions (
     cert                BIGINT PRIMARY KEY,
     name                TEXT,
     name_hcr            TEXT,
@@ -172,7 +174,7 @@ def load_fdic(parquet_path: str = None):
     update_clause = ", ".join([f"{c} = EXCLUDED.{c}" for c in update_cols])
 
     insert_sql = f"""
-        INSERT INTO raw_fdic_institutions ({", ".join(cols)})
+        INSERT INTO raw.raw_fdic_institutions ({", ".join(cols)})
         VALUES %s
         ON CONFLICT (cert) DO UPDATE SET
             {update_clause},
@@ -182,11 +184,11 @@ def load_fdic(parquet_path: str = None):
     execute_values(cur, insert_sql, values, page_size=1000)
     conn.commit()
 
-    cur.execute("SELECT COUNT(*) FROM raw_fdic_institutions;")
+    cur.execute("SELECT COUNT(*) FROM raw.raw_fdic_institutions;")
     total = cur.fetchone()[0]
 
     print(f"Loaded {len(values):,} institutions (upserted)")
-    print(f"Total rows in raw_fdic_institutions: {total:,}")
+    print(f"Total rows in raw.raw_fdic_institutions: {total:,}")
 
     cur.close()
     conn.close()
