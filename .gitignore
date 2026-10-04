@@ -10,6 +10,8 @@ venv/
 # Data (structure tracked, contents ignored)
 data/raw/*
 data/raw/complaints.csv     #actual raw data (csv format)
+data/curated/*.csv
+data/staging/*.csv
 data/staging/*
 data/curated/*
 !data/raw/.gitkeep
