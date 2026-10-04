@@ -1,0 +1,10 @@
+Rule,Failed Rows
+0_duplicate_cert,0
+1_null_core_keys,0
+2_invalid_state_code,0
+3_null_asset,5
+4_nonpositive_asset,0
+5_invalid_zip_format,0
+6_future_established_date,0
+7_unparseable_established_date,0
+8_not_active,0
