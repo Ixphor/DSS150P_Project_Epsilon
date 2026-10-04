@@ -3,19 +3,7 @@ import os
 import sys
 import time
 import pandas as pd
-import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
-DB_PORT = os.getenv("POSTGRES_PORT", "5432")
-DB_USER = os.getenv("POSTGRES_USER", "airflow")
-DB_PASS = os.getenv("POSTGRES_PASSWORD")
-if not DB_PASS:
-    raise EnvironmentError("POSTGRES_PASSWORD not set - check your .env file")
-TARGET_DB = os.getenv("POSTGRES_DB", "cfpb_pipeline")
+from src.utils.db import get_connection, ensure_database_exists
 
 EXPECTED_COLS = [
     "Date received", "Product", "Sub-product", "Issue", "Sub-issue",
@@ -52,33 +40,16 @@ CREATE INDEX IF NOT EXISTS idx_cfpb_product ON raw.raw_cfpb_complaints (product)
 """
 
 
-def ensure_database_and_table():
-    conn = psycopg2.connect(dbname="airflow", user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT)
-    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-    cur = conn.cursor()
-    cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (TARGET_DB,))
-    if not cur.fetchone():
-        cur.execute(f"CREATE DATABASE {TARGET_DB};")
-        print(f"Created database '{TARGET_DB}'.")
-    cur.close()
-    conn.close()
-
-    conn = psycopg2.connect(dbname=TARGET_DB, user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT)
-    cur = conn.cursor()
-    cur.execute(CREATE_TABLE_SQL)
-    conn.commit()
-    cur.close()
-    conn.close()
-
-
 def ingest_in_batches(csv_path: str, batch_size: int = 100_000, truncate_first: bool = True):
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"Cannot find file at: {csv_path}")
 
-    ensure_database_and_table()
-
-    conn = psycopg2.connect(dbname=TARGET_DB, user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT)
+    ensure_database_exists()
+    conn = get_connection()
     cur = conn.cursor()
+
+    cur.execute(CREATE_TABLE_SQL)
+    conn.commit()
 
     if truncate_first:
         cur.execute("TRUNCATE TABLE raw.raw_cfpb_complaints;")

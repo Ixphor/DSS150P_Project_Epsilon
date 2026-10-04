@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.extract.fdic_extract import RAW_DIR
+from src.extract.extract_fdic import RAW_DIR
 
 OUTPUT_DIR = Path("outputs/validation")
 VALID_STATES = {
