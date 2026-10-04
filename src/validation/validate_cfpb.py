@@ -9,8 +9,10 @@ load_dotenv()
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_USER = os.getenv("POSTGRES_USER", "airflow")
-DB_PASS = os.getenv("POSTGRES_PASSWORD", "airflow_pass")
-TARGET_DB = os.getenv("TARGET_DB", "cfpb_pipeline")
+DB_PASS = os.getenv("POSTGRES_PASSWORD")
+if not DB_PASS:
+    raise EnvironmentError("POSTGRES_PASSWORD not set - check your .env file")
+TARGET_DB = os.getenv("POSTGRES_DB", "airflow")
 
 VALIDATION_RULES = {
     "1_null_core_keys": "complaint_id IS NULL OR date_received IS NULL OR product IS NULL OR company IS NULL",
@@ -42,6 +44,9 @@ WHERE
     AND (date_sent_to_company >= date_received)
     AND (zip_code ~ '^[0-9X]{5}$' OR zip_code IS NULL OR zip_code = '')
     AND (date_received <= CURRENT_DATE);
+
+UPDATE staging.complaints
+SET company = UPPER(company);
 
 UPDATE staging.complaints
 SET tags = 'No Tag'
