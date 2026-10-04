@@ -1,16 +1,5 @@
 import os
-import psycopg2
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_USER = os.getenv("POSTGRES_USER", "airflow")
-DB_PASS = os.getenv("POSTGRES_PASSWORD")
-if not DB_PASS:
-    raise EnvironmentError("POSTGRES_PASSWORD not set - check your .env file")
-TARGET_DB = os.getenv("POSTGRES_DB", "airflow")
+from src.utils.db import get_connection
 
 TRANSFORM_SQL = """
 CREATE SCHEMA IF NOT EXISTS curated;
@@ -67,11 +56,11 @@ CREATE TABLE curated.fact_complaints (
 
 INSERT INTO curated.fact_complaints (
     complaint_id, company_id, product_id, issue_id,
-    date_received, date_sent_to_company, state, zip_code, tags, 
+    date_received, date_sent_to_company, state, zip_code, tags,
     submitted_via, company_public_response, company_response_to_consumer,
     timely_response, ingested_at
 )
-SELECT 
+SELECT
     s.complaint_id,
     c.company_id,
     p.product_id,
@@ -87,28 +76,28 @@ SELECT
     s.timely_response,
     s.ingested_at::TIMESTAMP
 FROM staging.complaints s
-LEFT JOIN curated.dim_company c 
+LEFT JOIN curated.dim_company c
     ON s.company = c.company_name
-LEFT JOIN curated.dim_product p 
+LEFT JOIN curated.dim_product p
     ON s.product = p.product_name AND s.sub_product IS NOT DISTINCT FROM p.sub_product_name
-LEFT JOIN curated.dim_issue i 
+LEFT JOIN curated.dim_issue i
     ON s.issue = i.issue_name AND s.sub_issue IS NOT DISTINCT FROM i.sub_issue;
 """
 
 def run_transformation():
     print("Connecting to database to build Star Schema...")
-    conn = psycopg2.connect(dbname=TARGET_DB, user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT)
+    conn = get_connection()
     cur = conn.cursor()
 
     print("Executing transformations in PostgreSQL (This may take 1-3 minutes for 18M rows)...")
     cur.execute(TRANSFORM_SQL)
-    
+
     cur.execute("SELECT COUNT(*) FROM curated.fact_complaints;")
     fact_count = cur.fetchone()[0]
-    
+
     cur.execute("SELECT COUNT(*) FROM curated.dim_company;")
     company_count = cur.fetchone()[0]
-    
+
     cur.execute("SELECT COUNT(*) FROM curated.dim_product;")
     product_count = cur.fetchone()[0]
 
@@ -123,14 +112,9 @@ def run_transformation():
 
     print("\nExporting Star Schema to 'data/curated/'...")
     os.makedirs("data/curated", exist_ok=True)
-    
-    tables_to_export = [
-        "dim_company",
-        "dim_product",
-        "dim_issue",
-        "fact_complaints"
-    ]
-    
+
+    tables_to_export = ["dim_company", "dim_product", "dim_issue", "fact_complaints"]
+
     for table in tables_to_export:
         file_path = f"data/curated/{table}.csv"
         with open(file_path, "w") as f:

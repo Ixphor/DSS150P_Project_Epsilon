@@ -1,18 +1,6 @@
 import os
-import psycopg2
 import pandas as pd
-from dotenv import load_dotenv
-
-# Force Python to read local environment variables (.env)
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_USER = os.getenv("POSTGRES_USER", "airflow")
-DB_PASS = os.getenv("POSTGRES_PASSWORD")
-if not DB_PASS:
-    raise EnvironmentError("POSTGRES_PASSWORD not set - check your .env file")
-TARGET_DB = os.getenv("POSTGRES_DB", "airflow")
+from src.utils.db import get_connection
 
 VALIDATION_RULES = {
     "1_null_core_keys": "complaint_id IS NULL OR date_received IS NULL OR product IS NULL OR company IS NULL",
@@ -55,10 +43,9 @@ WHERE tags IS NULL;
 
 def run_validations():
     print("Connecting to database to run validation checks...")
-    conn = psycopg2.connect(dbname=TARGET_DB, user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT)
+    conn = get_connection()
     cur = conn.cursor()
 
-    # Ensure staging schema exists before inserting tables
     cur.execute(CREATE_SCHEMA_SQL)
 
     cur.execute("SELECT COUNT(*) FROM raw.raw_cfpb_complaints;")
@@ -67,7 +54,7 @@ def run_validations():
 
     print("--- VALIDATION TEST RESULTS (DATA CLEANING SUMMARY) ---")
     failure_stats = []
-    
+
     cur.execute(DUPLICATE_CHECK_SQL)
     duplicate_count = cur.fetchone()[0]
     failure_stats.append({"Rule": "0_duplicate_complaint_ids", "Failed Rows": duplicate_count})
@@ -83,24 +70,22 @@ def run_validations():
     os.makedirs("outputs/validation", exist_ok=True)
     pd.DataFrame(failure_stats).to_csv("outputs/validation/validation_report.csv", index=False)
     print("\nValidation summary saved to 'outputs/validation/validation_report.csv'")
-    
+
     print("\nApplying filters and creating staging.complaints table in Postgres...")
     cur.execute(CREATE_STAGING_TABLE_SQL)
-    
+
     cur.execute("SELECT COUNT(*) FROM staging.complaints;")
     total_staged = cur.fetchone()[0]
-    
+
     print(f"Successfully staged {total_staged:,} valid records.")
     print(f"Total quarantined (failed validation): {total_raw - total_staged:,} records.")
-    
-    # Export validated data to the data/staging folder
+
     print("\nExporting validated data to 'data/staging/staged_complaints.csv'...")
     os.makedirs("data/staging", exist_ok=True)
-    
-    # Use Postgres native COPY instead of pandas for massive datasets
+
     with open("data/staging/staged_complaints.csv", "w") as f:
         cur.copy_expert("COPY staging.complaints TO STDOUT WITH CSV HEADER", f)
-        
+
     print("Clean data exported successfully!")
 
     conn.commit()

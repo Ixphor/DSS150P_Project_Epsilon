@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.extract.fdic_extract import RAW_DIR, fetch_institutions, save_raw
+from src.extract.extract_fdic import RAW_DIR, fetch_institutions, save_raw
 
 OUTPUT_DIR = Path("outputs/fdic_profiling")
 TOP_N = 5

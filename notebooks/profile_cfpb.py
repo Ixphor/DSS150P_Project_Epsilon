@@ -1,17 +1,6 @@
 import os
 import pandas as pd
-import psycopg2
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_USER = os.getenv("POSTGRES_USER", "airflow")
-DB_PASS = os.getenv("POSTGRES_PASSWORD")
-if not DB_PASS:
-    raise EnvironmentError("POSTGRES_PASSWORD not set - check your .env file")
-TARGET_DB = os.getenv("POSTGRES_DB", "airflow")
+from src.utils.db import get_connection
 
 OUTPUT_DIR = "outputs/cfpb_profiling"
 
@@ -108,7 +97,7 @@ TOP_TEXT_SQL = {
 
 def run_profiling():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    conn = psycopg2.connect(dbname=TARGET_DB, user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT)
+    conn = get_connection()
 
     print("Running dataset overview...")
     df_overview = pd.read_sql_query(OVERVIEW_SQL, conn)

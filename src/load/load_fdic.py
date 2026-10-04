@@ -8,17 +8,7 @@ import glob
 import sys
 from datetime import datetime
 import pandas as pd
-import psycopg2
-from psycopg2.extras import execute_values
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
-DB_PORT = os.getenv("POSTGRES_PORT", "5432")
-DB_USER = os.getenv("POSTGRES_USER", "airflow")
-DB_PASS = os.getenv("POSTGRES_PASSWORD")
-TARGET_DB = os.getenv("TARGET_DB", "cfpb_pipeline")
+from src.utils.db import get_connection, ensure_database_exists
 
 if not DB_PASS:
     raise EnvironmentError("POSTGRES_PASSWORD not set — check your .env file")
@@ -149,10 +139,8 @@ def load_fdic(parquet_path: str = None):
     cols = list(COLUMN_MAP.values())
     cols = [c for c in cols if c in df.columns]
 
-    conn = psycopg2.connect(
-        dbname=TARGET_DB, user=DB_USER, password=DB_PASS,
-        host=DB_HOST, port=DB_PORT,
-    )
+    ensure_database_exists()
+    conn = get_connection()
     cur = conn.cursor()
     cur.execute(CREATE_TABLE_SQL)
     conn.commit()
