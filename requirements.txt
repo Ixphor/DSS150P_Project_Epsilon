@@ -6,3 +6,4 @@ fastparquet==2026.9.0
 pyarrow==25.0.1
 great-expectations==0.18.22
 pytest==9.1.1
+apache-airflow
