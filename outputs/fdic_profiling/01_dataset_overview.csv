@@ -1,2 +1,2 @@
 total_records,unique_cert,distinct_names,names_shared_by_multiple_records,distinct_states,distinct_charter_classes,active_institutions,min_established,max_established,min_asset,max_asset,missing_or_nonpositive_asset
-4230,4230,3727,205,55,8,4230,1792-01-01,2026-09-28,3489.0,4091315000.0,5
+4223,4223,3722,205,55,8,4223,1792-01-01,2026-09-28,3489.0,4091315000.0,5
