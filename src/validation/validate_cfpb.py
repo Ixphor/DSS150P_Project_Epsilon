@@ -1,96 +1,66 @@
-import os
-import pandas as pd
-from src.utils.db import get_connection
+"""
+CFPB validation against raw.raw_cfpb_complaints (bulk + API rows together).
 
-VALIDATION_RULES = {
-    "1_null_core_keys": "complaint_id IS NULL OR date_received IS NULL OR product IS NULL OR company IS NULL",
-    "2_invalid_timely_enum": "timely_response NOT IN ('Yes', 'No') AND timely_response IS NOT NULL",
-    "3_negative_sla_lag": "date_sent_to_company < date_received OR date_sent_to_company IS NULL",
-    "4_invalid_zip_format": "zip_code !~ '^[0-9X]{5}$' AND zip_code IS NOT NULL AND zip_code != ''",
-    "5_future_date_received": "date_received > CURRENT_DATE"
+One table scan computes every rule. Rules marked error fail the task when more than
+MAX_REJECT_PCT of rows break them; rows that break the quarantine rules are excluded
+from staging by src.transform.stage (and kept in staging.complaints_rejected).
+"""
+import logging
+
+from src.utils import config
+from src.utils.db import get_connection
+from src.utils.logging_config import setup_logging
+from src.validation.common import CheckResult, enforce, write_report
+
+logger = logging.getLogger(__name__)
+
+TOL = config.MAX_REJECT_PCT
+
+# name -> (severity, tolerated %, SQL condition that identifies a FAILING row)
+RULES = {
+    "null_core_fields": ("error", TOL, "complaint_id IS NULL OR date_received IS NULL OR product IS NULL OR company IS NULL"),
+    "invalid_timely_enum": ("error", TOL, "timely_response IS NOT NULL AND timely_response NOT IN ('Yes', 'No')"),
+    "missing_or_negative_sla_lag": ("error", TOL, "date_sent_to_company IS NULL OR date_sent_to_company < date_received"),
+    "future_date_received": ("error", TOL, "date_received > CURRENT_DATE"),
+    "invalid_zip_format": ("warn", 0.0, "zip_code IS NOT NULL AND zip_code <> '' AND zip_code !~ '^[0-9X]{5}$'"),
 }
 
-DUPLICATE_CHECK_SQL = """
-SELECT COUNT(*) FROM (
-    SELECT complaint_id
-    FROM raw.raw_cfpb_complaints
-    GROUP BY complaint_id
-    HAVING COUNT(*) > 1
-) AS duplicates;
-"""
 
-CREATE_SCHEMA_SQL = "CREATE SCHEMA IF NOT EXISTS staging;"
+def build_checks(cur) -> list:
+    selects = ",\n  ".join(f"COUNT(*) FILTER (WHERE {cond}) AS \"{name}\"" for name, (_, _, cond) in RULES.items())
+    cur.execute(
+        f"SELECT COUNT(*) AS total, COUNT(DISTINCT complaint_id) AS uniq, MAX(date_received) AS max_date,\n  {selects}\n"
+        "FROM raw.raw_cfpb_complaints;"
+    )
+    cols = [d[0] for d in cur.description]
+    row = dict(zip(cols, cur.fetchone()))
+    total = row["total"]
 
-CREATE_STAGING_TABLE_SQL = """
-DROP TABLE IF EXISTS staging.complaints;
-CREATE TABLE staging.complaints AS
-SELECT *
-FROM raw.raw_cfpb_complaints
-WHERE
-    (complaint_id IS NOT NULL AND date_received IS NOT NULL AND product IS NOT NULL AND company IS NOT NULL)
-    AND (timely_response IN ('Yes', 'No') OR timely_response IS NULL)
-    AND (date_sent_to_company >= date_received)
-    AND (zip_code ~ '^[0-9X]{5}$' OR zip_code IS NULL OR zip_code = '')
-    AND (date_received <= CURRENT_DATE);
+    results = [
+        CheckResult("table_not_empty", 1 if total == 0 else 0, 1, detail=f"rows={total:,}"),
+        CheckResult("duplicate_complaint_ids", total - row["uniq"], total),
+    ]
+    for name, (severity, tol, _) in RULES.items():
+        results.append(CheckResult(name, row[name], total, severity=severity, max_fail_pct=tol))
 
-UPDATE staging.complaints
-SET company = UPPER(company);
+    cur.execute("SELECT (CURRENT_DATE - %s::date) > 14;", (row["max_date"],))
+    stale = bool(cur.fetchone()[0]) if row["max_date"] else True
+    results.append(CheckResult("freshness_within_14_days", int(stale), 1, severity="warn", detail=f"latest date_received={row['max_date']}"))
+    return results
 
-UPDATE staging.complaints
-SET tags = 'No Tag'
-WHERE tags IS NULL;
-"""
 
 def run_validations():
-    print("Connecting to database to run validation checks...")
     conn = get_connection()
-    cur = conn.cursor()
+    try:
+        with conn.cursor() as cur:
+            results = build_checks(cur)
+    finally:
+        conn.close()
+    write_report(results, config.VALIDATION_DIR / "validation_report.csv")
+    enforce(results, "CFPB")
+    return results
 
-    cur.execute(CREATE_SCHEMA_SQL)
-
-    cur.execute("SELECT COUNT(*) FROM raw.raw_cfpb_complaints;")
-    total_raw = cur.fetchone()[0]
-    print(f"Total raw records: {total_raw:,}\n")
-
-    print("--- VALIDATION TEST RESULTS (DATA CLEANING SUMMARY) ---")
-    failure_stats = []
-
-    cur.execute(DUPLICATE_CHECK_SQL)
-    duplicate_count = cur.fetchone()[0]
-    failure_stats.append({"Rule": "0_duplicate_complaint_ids", "Failed Rows": duplicate_count})
-    print(f"Failed 0_duplicate_complaint_ids: {duplicate_count:,} distinct IDs have duplicates")
-
-    for rule_name, sql_condition in VALIDATION_RULES.items():
-        query = f"SELECT COUNT(*) FROM raw.raw_cfpb_complaints WHERE {sql_condition};"
-        cur.execute(query)
-        failed_count = cur.fetchone()[0]
-        failure_stats.append({"Rule": rule_name, "Failed Rows": failed_count})
-        print(f"Failed {rule_name}: {failed_count:,} rows filtered out")
-
-    os.makedirs("outputs/validation", exist_ok=True)
-    pd.DataFrame(failure_stats).to_csv("outputs/validation/validation_report.csv", index=False)
-    print("\nValidation summary saved to 'outputs/validation/validation_report.csv'")
-
-    print("\nApplying filters and creating staging.complaints table in Postgres...")
-    cur.execute(CREATE_STAGING_TABLE_SQL)
-
-    cur.execute("SELECT COUNT(*) FROM staging.complaints;")
-    total_staged = cur.fetchone()[0]
-
-    print(f"Successfully staged {total_staged:,} valid records.")
-    print(f"Total quarantined (failed validation): {total_raw - total_staged:,} records.")
-
-    print("\nExporting validated data to 'data/staging/staged_complaints.csv'...")
-    os.makedirs("data/staging", exist_ok=True)
-
-    with open("data/staging/staged_complaints.csv", "w") as f:
-        cur.copy_expert("COPY staging.complaints TO STDOUT WITH CSV HEADER", f)
-
-    print("Clean data exported successfully!")
-
-    conn.commit()
-    cur.close()
-    conn.close()
 
 if __name__ == "__main__":
+    setup_logging()
     run_validations()

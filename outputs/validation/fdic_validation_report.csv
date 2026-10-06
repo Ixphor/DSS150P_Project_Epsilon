@@ -1,10 +1,12 @@
-Rule,Failed Rows
-0_duplicate_cert,0
-1_null_core_keys,0
-2_invalid_state_code,0
-3_null_asset,5
-4_nonpositive_asset,0
-5_invalid_zip_format,0
-6_future_established_date,0
-7_unparseable_established_date,0
-8_not_active,0
+Rule,Severity,Failed Rows,Total Rows,Fail Pct,Tolerance Pct,Status,Detail
+duplicate_cert,error,0,4223,0.0,0.0,PASS,
+row_count_floor,error,0,1000,0.0,0.0,PASS,rows=4223
+metadata_count_matches,error,0,4223,0.0,0.0,PASS,metadata=4223 actual=4223
+null_core_keys,error,0,4223,0.0,0.0,PASS,
+invalid_state_code,error,0,4223,0.0,0.0,PASS,
+nonpositive_asset,error,0,4223,0.0,0.0,PASS,
+not_active,error,0,4223,0.0,0.0,PASS,
+null_asset,warn,5,4223,0.1184,0.0,WARN,
+invalid_zip_format,warn,0,4223,0.0,0.0,PASS,
+future_established_date,warn,0,4223,0.0,0.0,PASS,
+unparseable_established_date,warn,0,4223,0.0,0.0,PASS,
