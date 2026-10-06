@@ -13,6 +13,8 @@ import shutil
 import zipfile
 from datetime import datetime, timezone
 
+from requests import session
+
 from src.utils import config
 from src.utils.http import build_session
 from src.utils.logging_config import setup_logging
@@ -22,24 +24,44 @@ logger = logging.getLogger(__name__)
 META_PATH = config.CFPB_BULK_CSV.with_suffix(".csv.meta.json")
 
 
-def download_zip(url: str, dest) -> int:
+def download_zip(url: str, dest, max_retries=3) -> int:
     """Streams the zip to `dest` (via a .part file so a failed download never looks complete)."""
+    import time
     part = dest.with_suffix(dest.suffix + ".part")
     session = build_session()
-    total = 0
-    next_log = 100 * 1024 * 1024
-    logger.info("Downloading %s", url)
-    with session.get(url, stream=True, timeout=120) as resp:
-        resp.raise_for_status()
-        with open(part, "wb") as fh:
-            for chunk in resp.iter_content(chunk_size=1024 * 1024):
-                fh.write(chunk)
-                total += len(chunk)
-                if total >= next_log:
-                    logger.info("  ... %d MB downloaded", total // (1024 * 1024))
-                    next_log += 100 * 1024 * 1024
-    part.replace(dest)
-    return total
+    
+    for attempt in range(max_retries):
+        total = 0
+        next_log = 100 * 1024 * 1024
+        logger.info("Downloading %s (Attempt %d/%d)", url, attempt + 1, max_retries)
+        
+        try:
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            with session.get(url, stream=True, headers=headers, timeout=(60, 300)) as resp:
+                resp.raise_for_status()
+                with open(part, "wb") as fh:
+                    for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                        if chunk:  # filter out keep-alive new chunks
+                            fh.write(chunk)
+                            total += len(chunk)
+                            if total >= next_log:
+                                logger.info("  ... %d MB downloaded", total // (1024 * 1024))
+                                next_log += 100 * 1024 * 1024
+            
+            # If we exit the loop without errors, the download finished
+            part.replace(dest)
+            return total
+            
+        except Exception as e:
+            logger.warning("Download interrupted (%s).", type(e).__name__)
+            if attempt < max_retries - 1:
+                logger.info("Retrying in 10 seconds...")
+                time.sleep(10)
+            else:
+                logger.error("Download failed after %d attempts.", max_retries)
+                if part.exists():
+                    part.unlink()  # Clean up the broken part file
+                raise
 
 
 def extract_csv(zip_path, target) -> None:
