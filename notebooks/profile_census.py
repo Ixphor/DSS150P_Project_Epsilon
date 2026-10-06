@@ -1,7 +1,7 @@
 """
 Source profiling for the Census ACS extract.
 Run after extract_census.py has produced at least one raw file.
-Outputs a profiling summary to docs/profiling/census_profile.md
+Outputs a profiling summary to outputs/census_profiling/census_profile.md
 """
 
 import os
@@ -10,7 +10,7 @@ import glob
 import pandas as pd
 
 RAW_DIR = os.path.join("data", "raw", "census")
-OUTPUT_PATH = os.path.join("docs", "profiling", "census_profile.md")
+OUTPUT_PATH = os.path.join("outputs", "census_profiling", "census_profile.md")
 
 # Census "jam values" — sentinel codes meaning the estimate couldn't be
 # computed (insufficient sample), NOT genuinely zero or missing-at-random.

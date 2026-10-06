@@ -67,7 +67,14 @@ def write_partition(df: pd.DataFrame, root: Path, **keys) -> Path:
     tmp_dir = part_dir.parent / f".{part_dir.name}.tmp"   # leading '.' -> ignored by dataset readers
     shutil.rmtree(tmp_dir, ignore_errors=True)
     tmp_dir.mkdir(parents=True)
-    df.drop(columns=list(keys)).to_parquet(tmp_dir / "part-0.parquet", index=False, compression="snappy")
+    out = df.drop(columns=list(keys))
+    # An all-NULL object column would be written as Parquet type "null"; a month where that column is
+    # entirely empty then clashes with months where it is a string (ArrowNotImplementedError on read).
+    # Pin such columns to string so every partition file has the same schema.
+    for col in out.columns[out.dtypes == object]:
+        if out[col].isna().all():
+            out[col] = out[col].astype("string")
+    out.to_parquet(tmp_dir / "part-0.parquet", index=False, compression="snappy")
     if part_dir.exists():
         shutil.rmtree(part_dir)
     tmp_dir.rename(part_dir)

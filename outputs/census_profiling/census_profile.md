@@ -1,7 +1,7 @@
 # Census ACS Source Profile
 
-- Source file: `data\raw\census\census_state_20261003T061849Z.json`
-- Retrieved at: 2026-10-03T06:18:49.448294+00:00
+- Source file: `data\raw\census\census_state_20261006T144137Z.json`
+- Retrieved at: 2026-10-06T14:41:37.061715+00:00
 - Source URL: https://api.census.gov/data/2022/acs/acs5
 - ACS year: 2022
 

@@ -59,7 +59,7 @@ def run(year=None, month=None) -> pd.DataFrame:
         elapsed = time.perf_counter() - start
         timely_pct = None
         if "is_timely" in table.column_names:
-            timely_pct = round(100.0 * table.column("is_timely").to_pandas().astype("float").mean(), 2)
+            timely_pct = round(float(100.0 * table.column("is_timely").to_pandas().astype("float").mean()), 2)
         rows.append({
             "scenario": label,
             "files_scanned": files,
