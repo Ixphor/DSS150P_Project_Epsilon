@@ -4,27 +4,29 @@ __pycache__/
 .venv/
 venv/
 
-# Environment
+# Environment / secrets
 .env
+*.env
+!.env.example
 
-# Data (structure tracked, contents ignored)
+# Archives
+*.zip
+project.zip
+
+# Data (folder structure tracked, contents ignored)
 data/raw/*
-data/raw/complaints.csv
-# actual raw data (csv format)
-data/curated/*.csv
-data/staging/*.csv
 data/staging/*
 data/curated/*
 !data/raw/.gitkeep
 !data/staging/.gitkeep
 !data/curated/.gitkeep
 
-# Airflow
+# Airflow / logs
 logs/*
 *.log
 !logs/.gitkeep
 
-# OS/editor
+# OS / editor
 .DS_Store
 .vscode/
 .idea/

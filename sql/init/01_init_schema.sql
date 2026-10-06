@@ -1,3 +1,5 @@
+-- Runs ONCE, when the Postgres volume is first created.
+-- The container's bootstrap database is "airflow" (Airflow metadata); the pipeline gets its own database.
 SELECT 'CREATE DATABASE cfpb_pipeline'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'cfpb_pipeline')\gexec
 
@@ -6,6 +8,9 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'cfpb_pipeline')\gexec
 CREATE SCHEMA IF NOT EXISTS raw;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS curated;
+
+-- NOTE: the loaders also run CREATE TABLE IF NOT EXISTS (src/load/*), so the pipeline
+-- works on a database that was initialised before these definitions existed.
 
 CREATE TABLE IF NOT EXISTS raw.raw_cfpb_complaints (
     date_received DATE,
@@ -24,8 +29,11 @@ CREATE TABLE IF NOT EXISTS raw.raw_cfpb_complaints (
     timely_response TEXT,
     complaint_id BIGINT PRIMARY KEY,
     ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    source_system TEXT DEFAULT 'cfpb_complaints_csv'
+    source_system TEXT,
+    batch_id TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_cfpb_date_received ON raw.raw_cfpb_complaints (date_received);
+CREATE INDEX IF NOT EXISTS idx_cfpb_product ON raw.raw_cfpb_complaints (product);
 
 CREATE TABLE IF NOT EXISTS raw.raw_fdic_institutions (
     cert                BIGINT PRIMARY KEY,
@@ -60,6 +68,6 @@ CREATE TABLE IF NOT EXISTS raw.raw_census_state (
     median_household_income  NUMERIC,
     poverty_population       NUMERIC,
     white_alone              NUMERIC,
-    black_alone               NUMERIC,
+    black_alone              NUMERIC,
     ingested_at              TIMESTAMP DEFAULT NOW()
 );

@@ -1,114 +1,62 @@
 """
-Census validation — runs after load_census.py.
-Implements 5 automated data-quality checks:
-  1. Schema/column presence
-  2. Row count (expect 52: 50 states + DC + PR)
-  3. Uniqueness (no duplicate state_fips)
-  4. Accepted values (state_fips must be a valid 2-digit code, zero-padded)
-  5. Range sanity (population/income must be positive, non-jam values)
+Census validation (runs after load_census). Five automated checks:
+  1 schema, 2 row count, 3 uniqueness, 4 accepted values, 5 range sanity.
+Raises ValidationError on failure so the Airflow task (and everything downstream) stops.
 """
 import logging
-from src.utils.db import get_connection
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+from src.utils import config
+from src.utils.db import get_connection, scalar
+from src.utils.logging_config import setup_logging
+from src.validation.common import CheckResult, enforce, write_report
+
 logger = logging.getLogger(__name__)
 
 EXPECTED_COLUMNS = {
     "state_fips", "name", "total_population", "median_household_income",
     "poverty_population", "white_alone", "black_alone", "ingested_at",
 }
-
 EXPECTED_ROW_COUNT = 52  # 50 states + DC + Puerto Rico
 
 
-def check_schema(cur) -> bool:
-    cur.execute("""
-        SELECT column_name FROM information_schema.columns
-        WHERE table_schema = 'raw' AND table_name = 'raw_census_state';
-    """)
-    actual_cols = {row[0] for row in cur.fetchall()}
-    missing = EXPECTED_COLUMNS - actual_cols
-    if missing:
-        logger.error("FAILED schema check — missing columns: %s", missing)
-        return False
-    logger.info("PASSED schema check — all expected columns present")
-    return True
+def build_checks(cur) -> list:
+    total = scalar(cur, "SELECT COUNT(*) FROM raw.raw_census_state;")
 
+    cur.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = 'raw' AND table_name = 'raw_census_state';"
+    )
+    missing = EXPECTED_COLUMNS - {r[0] for r in cur.fetchall()}
 
-def check_row_count(cur) -> bool:
-    cur.execute("SELECT COUNT(*) FROM raw.raw_census_state;")
-    count = cur.fetchone()[0]
-    if count != EXPECTED_ROW_COUNT:
-        logger.warning("Row count is %d, expected %d — possible partial load", count, EXPECTED_ROW_COUNT)
-        return False
-    logger.info("PASSED row count check — %d rows", count)
-    return True
+    dupes = scalar(cur, "SELECT COUNT(*) FROM (SELECT state_fips FROM raw.raw_census_state GROUP BY 1 HAVING COUNT(*) > 1) d;")
+    bad_codes = scalar(cur, "SELECT COUNT(*) FROM raw.raw_census_state WHERE state_fips !~ '^[0-9]{2}$';")
+    bad_ranges = scalar(
+        cur,
+        "SELECT COUNT(*) FROM raw.raw_census_state WHERE total_population IS NULL OR median_household_income IS NULL "
+        "OR total_population <= 0 OR median_household_income <= 0;",
+    )
 
-
-def check_uniqueness(cur) -> bool:
-    cur.execute("""
-        SELECT state_fips, COUNT(*) FROM raw.raw_census_state
-        GROUP BY state_fips HAVING COUNT(*) > 1;
-    """)
-    dupes = cur.fetchall()
-    if dupes:
-        logger.error("FAILED uniqueness check — duplicate state_fips: %s", dupes)
-        return False
-    logger.info("PASSED uniqueness check — no duplicate state_fips")
-    return True
-
-
-def check_accepted_values(cur) -> bool:
-    cur.execute("""
-        SELECT state_fips FROM raw.raw_census_state
-        WHERE state_fips !~ '^[0-9]{2}$';
-    """)
-    bad = cur.fetchall()
-    if bad:
-        logger.error("FAILED accepted-values check — invalid state_fips codes: %s", bad)
-        return False
-    logger.info("PASSED accepted-values check — all state_fips are valid 2-digit codes")
-    return True
-
-
-def check_ranges(cur) -> bool:
-    cur.execute("""
-        SELECT state_fips, total_population, median_household_income
-        FROM raw.raw_census_state
-        WHERE total_population < 0 OR median_household_income < 0
-           OR total_population IS NULL OR median_household_income IS NULL;
-    """)
-    bad = cur.fetchall()
-    if bad:
-        logger.warning("Range check found %d rows with null/negative population or income: %s", len(bad), bad)
-        return False
-    logger.info("PASSED range check — population and income are non-null and non-negative")
-    return True
+    return [
+        CheckResult("schema_columns_present", len(missing), len(EXPECTED_COLUMNS), detail=f"missing={sorted(missing)}" if missing else ""),
+        CheckResult("row_count_is_52", 0 if total == EXPECTED_ROW_COUNT else 1, 1, detail=f"actual={total}"),
+        CheckResult("unique_state_fips", dupes, total),
+        CheckResult("valid_fips_format", bad_codes, total),
+        CheckResult("population_income_positive", bad_ranges, total),
+    ]
 
 
 def run_validations():
     conn = get_connection()
-    cur = conn.cursor()
-
-    results = {
-        "schema": check_schema(cur),
-        "row_count": check_row_count(cur),
-        "uniqueness": check_uniqueness(cur),
-        "accepted_values": check_accepted_values(cur),
-        "ranges": check_ranges(cur),
-    }
-
-    cur.close()
-    conn.close()
-
-    passed = sum(results.values())
-    logger.info("Census validation summary: %d/%d checks passed", passed, len(results))
-
-    if passed < len(results):
-        logger.warning("One or more Census validation checks failed — review log above")
-
+    try:
+        with conn.cursor() as cur:
+            results = build_checks(cur)
+    finally:
+        conn.close()
+    write_report(results, config.VALIDATION_DIR / "census_validation_report.csv")
+    enforce(results, "Census")
     return results
 
 
 if __name__ == "__main__":
+    setup_logging()
     run_validations()

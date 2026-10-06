@@ -1,65 +1,61 @@
+"""
+FDIC extract: active institutions from the BankFind API, paginated.
+Raw JSON is saved untouched with ingestion metadata, plus a Parquet copy for the loader.
+"""
 import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
-import requests
 
-BASE_URL = "https://api.fdic.gov/banks/institutions"
-RAW_DIR = Path("data/raw/fdic")
-PAGE_SIZE = 1000
+from src.utils import config
+from src.utils.http import build_session
+from src.utils.logging_config import setup_logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+BASE_URL = f"{config.FDIC_API_BASE_URL}/institutions"
+RAW_DIR = config.RAW_DIR / "fdic"
+PAGE_SIZE = 1000
 
-def fetch_institutions(filters="ACTIVE:1"):
-    records = []
-    offset = 0
-    with requests.Session() as session:
-        while True:
-            params = {
-                "filters": filters,
-                "limit": PAGE_SIZE,
-                "offset": offset,
-                "sort_by": "CERT",
-                "sort_order": "ASC",
-                "format": "json",
-            }
 
-            try:
-                response = session.get(BASE_URL, params=params, timeout=60)
-                response.raise_for_status()
-            except requests.exceptions.Timeout:
-                logger.error("FDIC API request timed out at offset %d", offset)
-                raise
-            except requests.exceptions.HTTPError as e:
-                logger.error("FDIC API returned HTTP error at offset %d: %s", offset, e)
-                raise
-            except requests.exceptions.RequestException as e:
-                logger.error("FDIC API request failed at offset %d: %s", offset, e)
-                raise
-
+def fetch_institutions(filters: str = "ACTIVE:1") -> list[dict]:
+    records, offset = [], 0
+    session = build_session()
+    while True:
+        params = {
+            "filters": filters,
+            "limit": PAGE_SIZE,
+            "offset": offset,
+            "sort_by": "CERT",
+            "sort_order": "ASC",
+            "format": "json",
+        }
+        try:
+            response = session.get(BASE_URL, params=params, timeout=60)
+            response.raise_for_status()
             payload = response.json()
-            rows = payload.get("data", [])
-            if not rows:
-                break
+        except Exception:
+            logger.exception("FDIC API request failed at offset %d (%s)", offset, BASE_URL)
+            raise
 
-            records.extend(row["data"] for row in rows)
-            logger.info("Fetched %d institutions so far (offset %d)", len(records), offset)
-            offset += len(rows)
+        rows = payload.get("data", [])
+        if not rows:
+            break
+        records.extend(row["data"] for row in rows)
+        logger.info("Fetched %d institutions so far (offset %d)", len(records), offset)
+        offset += len(rows)
+        if len(rows) < PAGE_SIZE:  # short page = last page (more reliable than meta.total)
+            break
 
-            # Stop once we get a short page back — more reliable than trusting
-            # meta.total, which could be missing/0 and cause silent truncation.
-            if len(rows) < PAGE_SIZE:
-                break
-
+    if not records:
+        raise RuntimeError("FDIC API returned 0 institutions - refusing to write an empty raw file")
     logger.info("Finished fetching FDIC institutions: %d total", len(records))
     return records
 
 
-def save_raw(records):
+def save_raw(records: list[dict]) -> Path:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     path = RAW_DIR / f"fdic_institutions_{stamp}.json"
@@ -74,7 +70,7 @@ def save_raw(records):
     return path
 
 
-def to_parquet(raw_path):
+def to_parquet(raw_path: Path) -> Path:
     document = json.loads(raw_path.read_text(encoding="utf-8"))
     frame = pd.DataFrame(document["records"])
     out_path = raw_path.with_suffix(".parquet")
@@ -83,10 +79,12 @@ def to_parquet(raw_path):
     return out_path
 
 
-if __name__ == "__main__":
+def run() -> Path:
     records = fetch_institutions()
     raw_path = save_raw(records)
-    parquet_path = to_parquet(raw_path)
-    print(f"Fetched {len(records)} institutions")
-    print(f"Raw JSON: {raw_path}")
-    print(f"Parquet: {parquet_path}")
+    return to_parquet(raw_path)
+
+
+if __name__ == "__main__":
+    setup_logging()
+    run()

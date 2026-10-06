@@ -1,0 +1,6 @@
+Rule,Severity,Failed Rows,Total Rows,Fail Pct,Tolerance Pct,Status,Detail
+schema_columns_present,error,0,8,0.0,0.0,PASS,
+row_count_is_52,error,0,1,0.0,0.0,PASS,actual=52
+unique_state_fips,error,0,52,0.0,0.0,PASS,
+valid_fips_format,error,0,52,0.0,0.0,PASS,
+population_income_positive,error,0,52,0.0,0.0,PASS,

@@ -1,37 +1,46 @@
 x-airflow-common:
   &airflow-common
   build: .
+  image: epsilon-airflow:latest
+  # .env feeds every pipeline variable (API URLs, keys, thresholds) into the containers.
+  # Anything under `environment:` below overrides it.
+  env_file: .env
+  user: "${AIRFLOW_UID:-50000}:0"
   environment:
     &airflow-common-env
-    AIRFLOW_UID: ${AIRFLOW_UID:-50000}
-    AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
-    AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+    AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR:-LocalExecutor}
+    AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES:-false}
+    # Airflow's own metadata lives in the "airflow" database; the pipeline data lives in ${POSTGRES_DB}.
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/airflow
+    # Inside the Docker network the database host is the service name, not localhost.
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    PIPELINE_HOME: /opt/airflow
+    PYTHONPATH: /opt/airflow
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./config:/opt/airflow/config
     - ./src:/opt/airflow/src
-    - ./data:/opt/airflow/data
     - ./sql:/opt/airflow/sql
-  depends_on:
-    postgres:
-      condition: service_healthy
+    - ./data:/opt/airflow/data
+    - ./outputs:/opt/airflow/outputs
 
 services:
   postgres:
     image: postgres:13
     environment:
+      # Bootstrap database is "airflow"; sql/init/01_init_schema.sql creates the pipeline database.
       POSTGRES_USER: ${POSTGRES_USER:-airflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+      POSTGRES_DB: airflow
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
       - ./sql/init:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-airflow}"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-airflow}", "-d", "airflow"]
       interval: 5s
       retries: 5
     restart: always
@@ -41,10 +50,13 @@ services:
     command: version
     environment:
       <<: *airflow-common-env
-      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_DB_MIGRATE: 'true'
       _AIRFLOW_WWW_USER_CREATE: 'true'
       _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_WWW_USER_USERNAME:-admin}
       _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_WWW_USER_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   airflow-webserver:
     <<: *airflow-common
@@ -57,11 +69,21 @@ services:
       timeout: 10s
       retries: 5
     restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
     restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
 volumes:
   postgres-db-volume:
