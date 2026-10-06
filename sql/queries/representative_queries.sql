@@ -64,3 +64,24 @@ SELECT b.match_type, COUNT(DISTINCT b.company_id) AS companies, SUM(x.n) AS comp
 FROM curated.bridge_company_institution b
 JOIN (SELECT company_id, COUNT(*) AS n FROM curated.fact_complaints GROUP BY company_id) x USING (company_id)
 GROUP BY b.match_type;
+
+-- 9. Where are complaints rising? Year-over-year by state (mart)
+SELECT state_abbr, received_year, SUM(complaints) AS complaints
+FROM curated.mart_complaints_monthly
+WHERE state_abbr <> 'NA'
+GROUP BY state_abbr, received_year
+ORDER BY state_abbr, received_year;
+
+-- 10. Do large banks respond more slowly than small ones? (mart)
+SELECT asset_tier, SUM(complaints) AS complaints,
+       ROUND(100.0 * SUM(timely_complaints) / NULLIF(SUM(complaints), 0), 2) AS timely_pct
+FROM curated.mart_complaints_monthly
+GROUP BY asset_tier
+ORDER BY complaints DESC;
+
+-- 11. Worst complaint-to-size ratios among institutions with at least 100 complaints (scorecard)
+SELECT institution_name, asset_tier, received_year, complaints, complaints_per_billion_assets, timely_pct
+FROM curated.mart_institution_scorecard
+WHERE complaints >= 100
+ORDER BY complaints_per_billion_assets DESC NULLS LAST
+LIMIT 15;

@@ -1,9 +1,9 @@
 Rule,Severity,Failed Rows,Total Rows,Fail Pct,Tolerance Pct,Status,Detail
-table_not_empty,error,0,1,0.0,0.0,PASS,"rows=234,717"
-duplicate_complaint_ids,error,0,234717,0.0,0.0,PASS,
-null_core_fields,error,0,234717,0.0,1.0,PASS,
-invalid_timely_enum,error,0,234717,0.0,1.0,PASS,
-missing_or_negative_sla_lag,error,0,234717,0.0,1.0,PASS,
-future_date_received,error,0,234717,0.0,1.0,PASS,
-invalid_zip_format,warn,0,234717,0.0,0.0,PASS,
-freshness_within_14_days,warn,0,1,0.0,0.0,PASS,latest date_received=2026-09-27
+table_not_empty,error,0,1,0.0,0.0,PASS,"rows=36,063"
+duplicate_complaint_ids,error,0,36063,0.0,0.0,PASS,
+null_core_fields,error,0,36063,0.0,1.0,PASS,
+invalid_timely_enum,error,0,36063,0.0,1.0,PASS,
+missing_or_negative_sla_lag,error,0,36063,0.0,1.0,PASS,
+future_date_received,error,0,36063,0.0,1.0,PASS,
+invalid_zip_format,warn,0,36063,0.0,0.0,PASS,
+freshness_within_14_days,warn,0,1,0.0,0.0,PASS,latest date_received=2026-10-06

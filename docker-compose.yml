@@ -25,6 +25,7 @@ x-airflow-common:
     - ./sql:/opt/airflow/sql
     - ./data:/opt/airflow/data
     - ./outputs:/opt/airflow/outputs
+    - ./tests:/opt/airflow/tests
 
 services:
   postgres:

@@ -1,9 +1,9 @@
 Rule,Severity,Failed Rows,Total Rows,Fail Pct,Tolerance Pct,Status,Detail
-fact_matches_staging_rowcount,error,0,234717,0.0,0.0,PASS,"fact=234,717 staged=234,717"
-unique_complaint_id,error,0,234717,0.0,0.0,PASS,
-no_orphan_company_keys,error,0,234717,0.0,0.0,PASS,
-response_lag_non_negative,error,0,234717,0.0,0.0,PASS,
-date_received_in_valid_range,error,0,234717,0.0,0.0,PASS,
+fact_matches_staging_rowcount,error,0,36063,0.0,0.0,PASS,"fact=36,063 staged=36,063"
+unique_complaint_id,error,0,36063,0.0,0.0,PASS,
+no_orphan_company_keys,error,0,36063,0.0,0.0,PASS,
+response_lag_non_negative,error,0,36063,0.0,0.0,PASS,
+date_received_in_valid_range,error,0,36063,0.0,0.0,PASS,
 dim_geography_has_52_states,error,0,1,0.0,0.0,PASS,rows=52
-state_match_rate,error,278,234717,0.1184,5.0,WARN,unmatched states tolerated up to 5%
-fdic_crosswalk_matched_some,error,0,1,0.0,0.0,PASS,"matched_complaints=4,658"
+state_match_rate,error,65,36063,0.1802,5.0,WARN,unmatched states tolerated up to 5%
+fdic_crosswalk_matched_some,error,0,1,0.0,0.0,PASS,matched_complaints=870
