@@ -11,6 +11,7 @@ Flow
   FDIC   : extract_fdic >> load_fdic >> validate_fdic >> stage_fdic
   Census : extract_census >> load_census >> validate_census >> stage_census
   all three stage_* >> build_curated >> validate_curated
+  validate_curated >> build_mart >> validate_mart >> export_curated >> [benchmark_formats, partition_demo]
 
 Quality gates: every validate_* task RAISES on a failed check, which fails the task and
 blocks everything downstream. Reruns are safe: raw uses upserts (or skip-if-loaded), and
@@ -109,3 +110,12 @@ with DAG(
     validate_curated = py_task("validate_curated", "src.validation.validate_curated", retries=0)
 
     [stage_cfpb, stage_fdic, stage_census] >> build_curated >> validate_curated
+
+    # ------------------------------------------------------------ Data products and file layer
+    build_mart = py_task("build_mart", "src.transform.build_mart", execution_timeout=timedelta(minutes=30))
+    validate_mart = py_task("validate_mart", "src.validation.validate_mart", retries=0)
+    export_curated = py_task("export_curated", "src.export.export_curated", execution_timeout=timedelta(hours=2))
+    benchmark_formats = py_task("benchmark_formats", "src.export.benchmark_formats", "--rows 200000")
+    partition_demo = py_task("partition_demo", "src.export.read_partition_demo")
+
+    validate_curated >> build_mart >> validate_mart >> export_curated >> [benchmark_formats, partition_demo]

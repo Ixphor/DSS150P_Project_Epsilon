@@ -1,0 +1,7 @@
+Rule,Severity,Failed Rows,Total Rows,Fail Pct,Tolerance Pct,Status,Detail
+marts_not_empty,error,0,1,0.0,0.0,PASS,monthly=811 scorecard=35
+monthly_mart_sums_to_fact,error,0,36063,0.0,0.0,PASS,"mart=36,063 fact=36,063"
+scorecard_sums_to_matched_complaints,error,0,870,0.0,0.0,PASS,mart=870 fact_matched=870
+timely_pct_between_0_and_100,error,0,811,0.0,0.0,PASS,
+counts_internally_consistent,error,0,811,0.0,0.0,PASS,
+complaints_per_billion_assets_non_negative,error,0,35,0.0,0.0,PASS,
