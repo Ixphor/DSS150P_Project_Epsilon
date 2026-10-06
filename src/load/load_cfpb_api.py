@@ -7,12 +7,12 @@ file inserts nothing new; overlap with already-loaded complaints just refreshes 
 """
 import argparse
 import glob
-import json
 import logging
 from datetime import date
 from pathlib import Path
 from typing import Optional
 
+import ijson
 from psycopg2.extras import execute_values
 
 from src.load.cfpb_common import RAW_COLUMNS, ensure_table
@@ -35,7 +35,7 @@ RETURNING (xmax = 0) AS inserted;
 def latest_raw_file() -> Path:
     files = sorted(glob.glob(str(config.CFPB_API_RAW_DIR / "cfpb_api_*.json")))
     if not files:
-        raise FileNotFoundError(f"No CFPB API raw files in {config.CFPB_API_RAW_DIR} - run extract_cfpb_api first")
+        raise FileNotFoundError(f"No CFPB API raw files in {config.CFPB_API_RAW_DIR}. Run extract_cfpb_api first.")
     logger.info("Using latest raw file: %s", files[-1])
     return Path(files[-1])
 
@@ -86,28 +86,11 @@ def normalize_record(rec: dict, batch_id: str) -> Optional[tuple]:
 
 def load_api(raw_path: Path = None) -> dict:
     raw_path = raw_path or latest_raw_file()
-    document = json.loads(Path(raw_path).read_text(encoding="utf-8"))
-    batch_id = document.get("batch_id", "unknown")
-    records = document.get("records", [])
-    logger.info("File %s: %d records (complete=%s, gaps=%d)", Path(raw_path).name, len(records), document.get("complete"), len(document.get("gaps", [])))
-    if document.get("gaps"):
-        logger.warning("Extract reported gaps: %s", document["gaps"])
-
-    rows = {}
-    skipped = 0
-    for rec in records:
-        row = normalize_record(rec, batch_id)
-        if row is None:
-            skipped += 1
-        else:
-            rows[row[RAW_COLUMNS.index("complaint_id")]] = row  # last one wins (no double-update in one statement)
-    if skipped:
-        logger.warning("Skipped %d records without a valid complaint_id", skipped)
-
-    stats = {"read": len(records), "skipped": skipped, "inserted": 0, "updated": 0}
-    if not rows:
-        logger.info("Nothing to load")
-        return stats
+    
+    # Extract batch_id safely from the filename rather than loading the whole JSON envelope
+    batch_id = raw_path.stem.replace("cfpb_api_", "")
+    
+    stats = {"read": 0, "skipped": 0, "inserted": 0, "updated": 0}
 
     ensure_database_exists()
     conn = get_connection()
@@ -115,10 +98,45 @@ def load_api(raw_path: Path = None) -> dict:
         ensure_table(conn)
         cur = conn.cursor()
         before = scalar(cur, "SELECT COUNT(*) FROM raw.raw_cfpb_complaints;")
-        results = execute_values(cur, UPSERT_SQL, list(rows.values()), page_size=5000, fetch=True)
-        conn.commit()
-        stats["inserted"] = sum(1 for (ins,) in results if ins)
-        stats["updated"] = len(results) - stats["inserted"]
+        
+        # Stream the JSON file byte-by-byte
+        with open(raw_path, "rb") as f:
+            rows = {}
+            
+            # ijson streams only the objects inside the "records" array
+            for rec in ijson.items(f, 'records.item'):
+                stats["read"] += 1
+                row = normalize_record(rec, batch_id)
+                
+                if row is None:
+                    stats["skipped"] += 1
+                else:
+                    # Deduplicate within the batch using a dictionary
+                    complaint_id = row[RAW_COLUMNS.index("complaint_id")]
+                    rows[complaint_id] = row
+                
+                # Execute upsert when batch reaches 5000
+                if len(rows) >= 5000:
+                    results = execute_values(cur, UPSERT_SQL, list(rows.values()), fetch=True)
+                    inserted_this_batch = sum(1 for (ins,) in results if ins)
+                    stats["inserted"] += inserted_this_batch
+                    stats["updated"] += len(results) - inserted_this_batch
+                    
+                    conn.commit()
+                    rows.clear()
+                    logger.info("Processed %d records...", stats["read"])
+
+            # Process the final partial batch
+            if rows:
+                results = execute_values(cur, UPSERT_SQL, list(rows.values()), fetch=True)
+                inserted_this_batch = sum(1 for (ins,) in results if ins)
+                stats["inserted"] += inserted_this_batch
+                stats["updated"] += len(results) - inserted_this_batch
+                conn.commit()
+
+        if stats["skipped"]:
+            logger.warning("Skipped %d records without a valid complaint_id", stats["skipped"])
+
         after = scalar(cur, "SELECT COUNT(*) FROM raw.raw_cfpb_complaints;")
         logger.info("Upsert complete: %d inserted (new), %d updated (already present). Table rows %s -> %s",
                     stats["inserted"], stats["updated"], f"{before:,}", f"{after:,}")
@@ -128,6 +146,7 @@ def load_api(raw_path: Path = None) -> dict:
         raise
     finally:
         conn.close()
+        
     return stats
 
 

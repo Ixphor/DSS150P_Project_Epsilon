@@ -54,7 +54,7 @@ class CFPBApiClient:
         self.gaps: list[dict] = []
         self.requests_made = 0
 
-    # ---------- low level ----------
+# ---------- low level ----------
     def _get(self, params: dict) -> dict:
         self.requests_made += 1
         headers = {
@@ -68,8 +68,19 @@ class CFPBApiClient:
             if wait > 0:
                 self._sleep(wait)
             self._last_request = time.monotonic()
-            resp = self.session.get(self.base_url, params=params, headers=headers, timeout=60)
-            status = getattr(resp, "status_code", 200)
+            
+            try:
+                resp = self.session.get(self.base_url, params=params, headers=headers, timeout=60)
+                status = getattr(resp, "status_code", 200)
+            except Exception as e:
+                # Catch network timeouts, connection drops, etc.
+                if attempt < self.max_retries:
+                    delay = self.backoff * (2 ** attempt)
+                    logger.warning("Network error (%s); retry %d/%d in %.0fs", type(e).__name__, attempt + 1, self.max_retries, delay)
+                    self._sleep(delay)
+                    continue
+                raise CFPBApiError(f"Network request failed after {self.max_retries} retries") from e
+
             if status in (429, 500, 502, 503, 504) and attempt < self.max_retries:
                 delay = self.backoff * (2 ** attempt)
                 retry_after = getattr(resp, "headers", {}).get("Retry-After")
@@ -79,12 +90,20 @@ class CFPBApiClient:
                 self._sleep(delay)
                 continue
             break
-        resp.raise_for_status()
+            
+        if not resp.ok:
+            error_body = getattr(resp, "text", "<no body>")[:1000]
+            raise CFPBApiError(
+                f"HTTP {resp.status_code} Bad Request.\n"
+                f"Parameters sent: {params}\n"
+                f"API Error Response: {error_body}"
+            )
+
         try:
             return resp.json()
         except ValueError as exc:
             raise CFPBApiError(f"API returned non-JSON content: {resp.text[:200]!r}") from exc
-
+        
     @staticmethod
     def parse(payload) -> tuple[list[dict], Optional[int], Optional[list]]:
         """Returns (records, total_hits, last_sort_cursor). Handles the Elasticsearch-style envelope.
@@ -120,8 +139,17 @@ class CFPBApiClient:
         return params
 
     # ---------- counting and paging ----------
+    # ---------- counting and paging ----------
     def count(self, filters: dict) -> int:
-        _, total, _ = self.parse(self._get(self._params(filters, size=1, frm=0)))
+        try:
+            _, total, _ = self.parse(self._get(self._params(filters, size=1, frm=0)))
+        except CFPBApiError as e:
+            # If the API rejects a legacy product or state from our DB, treat as 0 hits
+            if "is not a valid choice" in str(e):
+                logger.info("API rejected legacy filter, assuming 0 hits: %s", filters)
+                return 0
+            raise
+            
         if total is None:
             raise CFPBApiError("API response did not include a total hit count")
         return total
