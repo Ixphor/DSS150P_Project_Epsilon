@@ -1,4 +1,4 @@
 scenario,files_scanned,rows_read,columns_read,seconds,timely_pct
-"1. whole dataset, 2 columns",2,36063,2,0.005,99.84
-"2. partition 2026-10, 2 columns",1,13452,2,0.003,100.0
-"3. partition 2026-10, all columns",1,13452,29,0.009,100.0
+"1. whole dataset, 2 columns",179,18217992,2,0.841,99.39
+"2. partition 2026-10, 2 columns",1,49216,2,0.016,100.0
+"3. partition 2026-10, all columns",1,49216,29,0.023,100.0

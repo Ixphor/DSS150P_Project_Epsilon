@@ -1,0 +1,32 @@
+{
+  "generated_at_utc": "2026-10-07T03:49:04.856213+00:00",
+  "rows_analysed": 17499205,
+  "date_range": [
+    "2011-12-01",
+    "2026-08-01"
+  ],
+  "distinct_batch_ids": 1,
+  "latest_batch_id": "bulk_20261006T161852Z",
+  "pct_still_open_excluded_from_unfavorable": 0.98,
+  "pct_fdic_matched": 7.12,
+  "pipeline_validation_status": {
+    "census_validation_report.csv": {
+      "PASS": 5
+    },
+    "curated_validation_report.csv": {
+      "PASS": 7,
+      "WARN": 1
+    },
+    "fdic_validation_report.csv": {
+      "PASS": 10,
+      "WARN": 1
+    },
+    "mart_validation_report.csv": {
+      "PASS": 6
+    },
+    "validation_report.csv": {
+      "PASS": 6,
+      "WARN": 2
+    }
+  }
+}

@@ -1,0 +1,9 @@
+dimension,outcome,chi2,p_value,cramers_v,effect_size
+product_name,untimely,511043.87686230725,0.0,0.1708912927498962,moderate
+product_name,unfavorable,740319.7532571638,0.0,0.20670183596793468,moderate
+institution_group,untimely,2599.0067709453297,0.0,0.012186936437898279,negligible/small
+institution_group,unfavorable,103417.83971365774,0.0,0.07725603163400578,negligible/small
+state_abbr,untimely,12141.133540188279,0.0,0.026396533715966078,negligible/small
+state_abbr,unfavorable,21138.224423597698,0.0,0.035002696356373826,negligible/small
+submitted_via,untimely,14088.29386858346,0.0,0.02837396584267636,negligible/small
+submitted_via,unfavorable,84809.43444921092,0.0,0.06996111928508451,negligible/small
