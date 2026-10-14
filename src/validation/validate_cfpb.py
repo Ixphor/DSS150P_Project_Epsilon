@@ -11,19 +11,14 @@ from src.utils import config
 from src.utils.db import get_connection
 from src.utils.logging_config import setup_logging
 from src.validation.common import CheckResult, enforce, write_report
+from src.validation.contracts import load_rules
 
 logger = logging.getLogger(__name__)
 
 TOL = config.MAX_REJECT_PCT
 
 # name -> (severity, tolerated %, SQL condition that identifies a FAILING row)
-RULES = {
-    "null_core_fields": ("error", TOL, "complaint_id IS NULL OR date_received IS NULL OR product IS NULL OR company IS NULL"),
-    "invalid_timely_enum": ("error", TOL, "timely_response IS NOT NULL AND timely_response NOT IN ('Yes', 'No')"),
-    "missing_or_negative_sla_lag": ("error", TOL, "date_sent_to_company IS NULL OR date_sent_to_company < date_received"),
-    "future_date_received": ("error", TOL, "date_received > CURRENT_DATE"),
-    "invalid_zip_format": ("warn", 0.0, "zip_code IS NOT NULL AND zip_code <> '' AND zip_code !~ '^[0-9X]{5}$'"),
-}
+RULES = load_rules("cfpb_complaints")
 
 
 def build_checks(cur) -> list:

@@ -1,0 +1,74 @@
+# Data contract: CFPB complaints (raw layer)
+# Machine-readable. The `rules` block is executed by src/validation/validate_cfpb.py
+# through src/validation/contracts.py. Human-readable version: docs/data_dictionary.md section 1.1.
+contract: cfpb_complaints
+version: 1.0.0
+table: raw.raw_cfpb_complaints
+grain: One row per CFPB complaint
+primary_key: [complaint_id]
+owner: CFPB
+source:
+  system: CFPB Consumer Complaint Database
+  access: [bulk CSV (one-time bootstrap), Search API (daily, 14-day lookback)]
+refresh: daily
+load_strategy: bulk skip-if-loaded; API upsert on complaint_id
+volume_expectation: ">= 1 row (table_not_empty); about 18.2M rows after bootstrap"
+
+columns:
+  - {name: complaint_id,                 type: BIGINT,    nullable: false, unique: true}
+  - {name: date_received,                type: DATE,      nullable: true,  note: "quarantine if NULL or in the future"}
+  - {name: product,                      type: TEXT,      nullable: true,  note: "quarantine if NULL"}
+  - {name: sub_product,                  type: TEXT,      nullable: true,  note: "blank becomes 'Not specified' in staging"}
+  - {name: issue,                        type: TEXT,      nullable: true,  note: "blank becomes 'Not specified' in staging"}
+  - {name: sub_issue,                    type: TEXT,      nullable: true,  note: "blank becomes 'Not specified' in staging"}
+  - {name: company_public_response,      type: TEXT,      nullable: true}
+  - {name: company,                      type: TEXT,      nullable: true,  note: "quarantine if NULL"}
+  - {name: state,                        type: TEXT,      nullable: true}
+  - {name: zip_code,                     type: TEXT,      nullable: true,  pattern: "^[0-9X]{5}$", note: "invalid ZIP is set to NULL in staging"}
+  - {name: tags,                         type: TEXT,      nullable: true,  note: "blank becomes 'No Tag' in staging"}
+  - {name: submitted_via,                type: TEXT,      nullable: true}
+  - {name: date_sent_to_company,         type: DATE,      nullable: true,  note: "quarantine if NULL or before date_received"}
+  - {name: company_response_to_consumer, type: TEXT,      nullable: true}
+  - {name: timely_response,              type: TEXT,      nullable: true,  allowed: ["Yes", "No"]}
+  - {name: ingested_at,                  type: TIMESTAMP, nullable: true}
+  - {name: source_system,                type: TEXT,      nullable: true}
+  - {name: batch_id,                     type: TEXT,      nullable: true}
+
+# tolerance_pct: "default" means MAX_REJECT_PCT from the environment (1.0 unless overridden)
+# severity:      error = FAIL when the failing share exceeds tolerance, warn = report only
+# on_violation:  documented action. Rows breaking a quarantine rule go to
+#                staging.complaints_rejected with the given reject_reason.
+rules:
+  - name: null_core_fields
+    severity: error
+    tolerance_pct: default
+    failing_condition: "complaint_id IS NULL OR date_received IS NULL OR product IS NULL OR company IS NULL"
+    on_violation: quarantine
+    reject_reason: null_core_field
+  - name: invalid_timely_enum
+    severity: error
+    tolerance_pct: default
+    failing_condition: "timely_response IS NOT NULL AND timely_response NOT IN ('Yes', 'No')"
+    on_violation: quarantine
+    reject_reason: invalid_timely_enum
+  - name: missing_or_negative_sla_lag
+    severity: error
+    tolerance_pct: default
+    failing_condition: "date_sent_to_company IS NULL OR date_sent_to_company < date_received"
+    on_violation: quarantine
+    reject_reason: missing_or_negative_sla_lag
+  - name: future_date_received
+    severity: error
+    tolerance_pct: default
+    failing_condition: "date_received > CURRENT_DATE"
+    on_violation: quarantine
+    reject_reason: future_date_received
+  - name: invalid_zip_format
+    severity: warn
+    tolerance_pct: 0.0
+    failing_condition: "zip_code IS NOT NULL AND zip_code <> '' AND zip_code !~ '^[0-9X]{5}$'"
+    on_violation: warn
+
+# Checks that are not row-condition rules and stay in code (validate_cfpb.py):
+#   table_not_empty (error), duplicate_complaint_ids (error, tolerance 0),
+#   freshness_within_14_days (warn)
