@@ -21,7 +21,10 @@ class FakeSession:
         ]
         page = rows[params["frm"]: params["frm"] + params["size"]]
         body = {"hits": {"total": {"value": len(rows)}, "hits": [{"_source": r} for r in page]}}
-        return type("Resp", (), {"raise_for_status": lambda self: None, "json": lambda self: body})()
+        return type("Resp", (), {
+            "ok": True, "status_code": 200, "text": "", "headers": {},
+            "raise_for_status": lambda self: None, "json": lambda self: body,
+        })()
 
 
 def make_records(days=3, per_day=40, null_state_per_day=0):

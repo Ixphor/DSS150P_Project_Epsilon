@@ -2,6 +2,9 @@ import os
 import sys
 from pathlib import Path
 
-# Allow `import src...` when pytest runs from the repo root, and satisfy db.py's password check.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-os.environ.setdefault("POSTGRES_PASSWORD", "test-only")
+from dotenv import load_dotenv
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+load_dotenv(ROOT / ".env")                                  # real password first
+os.environ.setdefault("POSTGRES_PASSWORD", "test-only")     # fallback for machines with no .env

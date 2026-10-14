@@ -2,7 +2,7 @@ Benchmark sample: 200,000 rows x 29 columns (most recent complaints from curated
 
 | format | size_mb | write_s | read_all_columns_s | read_3_columns_s | schema_preserved_pct | size_vs_csv_pct |
 |---|---|---|---|---|---|---|
-| csv | 64.3 | 7.63 | 0.87 | 0.53 | 86.2 | 100.0 |
-| json_lines | 178.42 | 2.98 | 3.34 | 3.36 | 86.2 | 277.5 |
-| parquet_snappy | 2.58 | 0.76 | 0.13 | 0.01 | 100.0 | 4.0 |
-| parquet_zstd | 1.95 | 0.76 | 0.11 | 0.02 | 100.0 | 3.0 |
+| csv | 64.46 | 1.44 | 0.39 | 0.19 | 86.2 | 100.0 |
+| json_lines | 178.58 | 1.54 | 1.61 | 1.75 | 86.2 | 277.0 |
+| parquet_snappy | 2.19 | 0.27 | 0.06 | 0.0 | 100.0 | 3.4 |
+| parquet_zstd | 1.58 | 0.22 | 0.04 | 0.0 | 100.0 | 2.5 |

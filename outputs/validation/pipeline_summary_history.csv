@@ -1,0 +1,17 @@
+label,taken_at_utc,layer,table,row_count,distinct_keys,has_duplicates
+after_local_run,2026-10-13 22:52:56,raw,raw.raw_cfpb_complaints,18367967,18367967.0,False
+after_local_run,2026-10-13 22:52:56,raw,raw.raw_fdic_institutions,4223,4223.0,False
+after_local_run,2026-10-13 22:52:56,raw,raw.raw_census_state,52,52.0,False
+after_local_run,2026-10-13 22:52:56,staging,staging.complaints,18360917,18360917.0,False
+after_local_run,2026-10-13 22:52:56,staging,staging.complaints_rejected,7050,7050.0,False
+after_local_run,2026-10-13 22:52:56,staging,staging.fdic_institutions,4223,4223.0,False
+after_local_run,2026-10-13 22:52:56,staging,staging.census_state,52,52.0,False
+after_local_run,2026-10-13 22:52:56,curated,curated.dim_company,8123,8123.0,False
+after_local_run,2026-10-13 22:52:56,curated,curated.dim_product,127,127.0,False
+after_local_run,2026-10-13 22:52:56,curated,curated.dim_issue,441,441.0,False
+after_local_run,2026-10-13 22:52:56,curated,curated.dim_geography,52,52.0,False
+after_local_run,2026-10-13 22:52:56,curated,curated.dim_institution,4223,4223.0,False
+after_local_run,2026-10-13 22:52:56,curated,curated.bridge_company_institution,118,118.0,False
+after_local_run,2026-10-13 22:52:56,curated,curated.fact_complaints,18360917,18360917.0,False
+after_local_run,2026-10-13 22:52:56,curated,curated.mart_complaints_monthly,178857,,False
+after_local_run,2026-10-13 22:52:56,curated,curated.mart_institution_scorecard,1230,,False

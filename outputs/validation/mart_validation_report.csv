@@ -1,7 +1,7 @@
 Rule,Severity,Failed Rows,Total Rows,Fail Pct,Tolerance Pct,Status,Detail
-marts_not_empty,error,0,1,0.0,0.0,PASS,"monthly=178,655 scorecard=1,230"
-monthly_mart_sums_to_fact,error,0,18217992,0.0,0.0,PASS,"mart=18,217,992 fact=18,217,992"
-scorecard_sums_to_matched_complaints,error,0,1260984,0.0,0.0,PASS,"mart=1,260,984 fact_matched=1,260,984"
-timely_pct_between_0_and_100,error,0,178655,0.0,0.0,PASS,
-counts_internally_consistent,error,0,178655,0.0,0.0,PASS,
+marts_not_empty,error,0,1,0.0,0.0,PASS,"monthly=178,916 scorecard=1,230"
+monthly_mart_sums_to_fact,error,0,18378682,0.0,0.0,PASS,"mart=18,378,682 fact=18,378,682"
+scorecard_sums_to_matched_complaints,error,0,1263050,0.0,0.0,PASS,"mart=1,263,050 fact_matched=1,263,050"
+timely_pct_between_0_and_100,error,0,178916,0.0,0.0,PASS,
+counts_internally_consistent,error,0,178916,0.0,0.0,PASS,
 complaints_per_billion_assets_non_negative,error,0,1230,0.0,0.0,PASS,
