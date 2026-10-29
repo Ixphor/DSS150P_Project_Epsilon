@@ -1,1 +1,3 @@
+outputs/** linguist-generated=true
+outputs/** linguist-vendored=true
 *.html linguist-detectable=false
